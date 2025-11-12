@@ -29,6 +29,17 @@ object Constants {
     val HIGH_THREATS = setOf("person", "bicycle", "dog")
     val MEDIUM_THREATS = setOf("chair", "bench", "potted plant")
 
+    val COLLISION_THREATS = setOf(
+        "person", "chair", "couch", "bench", "table", "bed",
+        "door", "refrigerator", "tv", "dining table", "toilet",
+        "bicycle", "motorcycle", "car", "truck", "bus"
+    )
+
+    // For generic obstacles (when walking towards something big)
+    const val COLLISION_AREA_THRESHOLD = 0.25f  // 25% of screen = walking into it
+    const val COLLISION_CENTER_THRESHOLD = 0.3f  // Must be in center 40% of frame
+
+
     // Detection thresholds
     const val CONFIDENCE_THRESHOLD = 0.5f
     const val IOU_THRESHOLD = 0.45f
@@ -59,4 +70,16 @@ object Constants {
 
     // Button event from glove
     const val BUTTON_EVENT: Byte = 0x01
+
+    enum class DetectionMode {
+        NORMAL,          // Continuous object detection
+        WAITING_QR,      // Waiting for QR scan confirmation
+        WAITING_OCR,     // Waiting for text read confirmation
+        SCANNING_QR,     // Currently scanning QR
+        READING_TEXT     // Currently reading text
+    }
+
+    // Confidence thresholds for auto-detection
+    const val QR_DETECTION_COOLDOWN = 10000L  // 10 seconds between QR prompts
+    const val TEXT_DETECTION_COOLDOWN = 10000L // 10 seconds between text prompts
 }

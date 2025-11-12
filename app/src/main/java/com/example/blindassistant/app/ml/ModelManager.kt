@@ -1,4 +1,4 @@
-// app/src/main/java/com/blindassistant/app/ml/ModelManager.kt
+// app/src/main/java/com/example/blindassistant/app/ml/ModelManager.kt
 
 package com.example.blindassistant.app.ml
 
@@ -24,7 +24,7 @@ class ModelManager(private val context: Context) {
     companion object {
         private const val TAG = "ModelManager"
         private const val YOLO_MODEL = "models/yolov8n.torchscript"
-        private const val POTHOLE_MODEL = "models/pothole_detector.torchscript"
+        private const val POTHOLE_MODEL = "models/best.torchscript"
         private const val INPUT_SIZE = 640
         private const val POTHOLE_INPUT_SIZE = 416
     }
@@ -35,11 +35,9 @@ class ModelManager(private val context: Context) {
         try {
             Log.d(TAG, "Initializing models...")
 
-            // Load YOLOv8
             yoloModel = Module.load(assetFilePath(YOLO_MODEL))
             Log.d(TAG, "✅ YOLOv8 loaded")
 
-            // Load pothole detector
             potholeModel = Module.load(assetFilePath(POTHOLE_MODEL))
             Log.d(TAG, "✅ Pothole detector loaded")
 
@@ -59,18 +57,14 @@ class ModelManager(private val context: Context) {
         }
 
         return try {
-            // Preprocess
             val resizedBitmap = Bitmap.createScaledBitmap(bitmap, INPUT_SIZE, INPUT_SIZE, true)
             val inputTensor = TensorImageUtils.bitmapToFloat32Tensor(
                 resizedBitmap,
-                floatArrayOf(0f, 0f, 0f),  // No normalization for YOLOv8
+                floatArrayOf(0f, 0f, 0f),
                 floatArrayOf(1f, 1f, 1f)
             )
 
-            // Inference
             val outputTensor = yoloModel!!.forward(IValue.from(inputTensor)).toTensor()
-
-            // Post-process
             postprocessYOLO(outputTensor, Constants.COCO_CLASSES)
 
         } catch (e: Exception) {
@@ -101,7 +95,7 @@ class ModelManager(private val context: Context) {
 
     private fun postprocessYOLO(output: Tensor, classNames: Array<String>): List<Detection> {
         val outputData = output.dataAsFloatArray
-        val shape = output.shape()  // [1, 84, 8400]
+        val shape = output.shape()
 
         val numBoxes = shape[2].toInt()
         val numValues = shape[1].toInt()
@@ -109,20 +103,17 @@ class ModelManager(private val context: Context) {
         val detections = mutableListOf<Detection>()
 
         for (i in 0 until numBoxes) {
-            // Extract box values
             val boxData = FloatArray(numValues)
             for (j in 0 until numValues) {
                 val idx = j * numBoxes + i
                 boxData[j] = outputData[idx]
             }
 
-            // Bbox coords
             val xCenter = boxData[0] / INPUT_SIZE
             val yCenter = boxData[1] / INPUT_SIZE
             val width = boxData[2] / INPUT_SIZE
             val height = boxData[3] / INPUT_SIZE
 
-            // Class scores
             val classScores = boxData.sliceArray(4 until numValues)
             val maxScore = classScores.maxOrNull() ?: 0f
             val maxClassId = classScores.indices.maxByOrNull { classScores[it] } ?: 0
@@ -178,18 +169,6 @@ class ModelManager(private val context: Context) {
         return if (union > 0) intersection / union else 0f
     }
 
-//    private fun assetFilePath(assetName: String): String {
-//        val file = File(context.filesDir, assetName)
-//        if (file.exists()) return file.absolutePath
-//
-//        context.assets.open(assetName).use { inputStream ->
-//            FileOutputStream(file).use { outputStream ->
-//                inputStream.copyTo(outputStream)
-//            }
-//        }
-//        return file.absolutePath
-//    }
-
     private fun assetFilePath(assetName: String): String {
         val outFile = File(context.filesDir, assetName)
 
@@ -206,6 +185,7 @@ class ModelManager(private val context: Context) {
 
         return outFile.absolutePath
     }
+
 
     fun cleanup() {
         yoloModel = null

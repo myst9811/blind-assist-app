@@ -1,4 +1,4 @@
-// app/src/main/java/com/blindassistant/app/services/GeminiService.kt
+// app/src/main/java/com/example/blindassistant/app/services/GeminiService.kt
 
 package com.example.blindassistant.app.services
 
@@ -9,7 +9,6 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 
 class GeminiService(private val context: Context) {
 
@@ -30,14 +29,62 @@ class GeminiService(private val context: Context) {
         Log.d(TAG, "✅ Gemini initialized")
     }
 
+    suspend fun quickCheckForQR(bitmap: Bitmap): Boolean = withContext(Dispatchers.IO) {
+        if (!isInitialized) return@withContext false
+
+        try {
+            val prompt = """
+                Is there a QR code or barcode visible in this image?
+                Respond with only "YES" or "NO".
+            """.trimIndent()
+
+            val inputContent = content {
+                image(bitmap)
+                text(prompt)
+            }
+
+            val response = model.generateContent(inputContent)
+            val answer = response.text?.trim()?.uppercase() ?: "NO"
+
+            answer.contains("YES")
+        } catch (e: Exception) {
+            Log.e(TAG, "QR check error", e)
+            false
+        }
+    }
+
+    suspend fun quickCheckForText(bitmap: Bitmap): Boolean = withContext(Dispatchers.IO) {
+        if (!isInitialized) return@withContext false
+
+        try {
+            val prompt = """
+                Is there readable text (like a document, sign, label, or paper) in this image?
+                Respond with only "YES" or "NO".
+            """.trimIndent()
+
+            val inputContent = content {
+                image(bitmap)
+                text(prompt)
+            }
+
+            val response = model.generateContent(inputContent)
+            val answer = response.text?.trim()?.uppercase() ?: "NO"
+
+            answer.contains("YES")
+        } catch (e: Exception) {
+            Log.e(TAG, "Text check error", e)
+            false
+        }
+    }
+
     suspend fun extractText(bitmap: Bitmap): String = withContext(Dispatchers.IO) {
         if (!isInitialized) return@withContext "Gemini not initialized"
 
         try {
             val prompt = """
                 Extract ALL text from this image.
-                Include every word, number, and symbol you see.
-                Maintain the original layout and structure.
+                Read every word, number, and symbol clearly.
+                Maintain the original reading order (top to bottom, left to right).
                 If you see no text, respond with "NO_TEXT_FOUND".
             """.trimIndent()
 
@@ -61,7 +108,9 @@ class GeminiService(private val context: Context) {
         try {
             val prompt = """
                 Scan this image for QR codes or barcodes.
-                Decode and return the content.
+                Decode and return the exact content.
+                If it's a URL, say "This QR code contains a link to [URL]"
+                If it's text, say "This QR code contains: [text]"
                 If no codes found, respond with "NO_CODE_FOUND".
             """.trimIndent()
 

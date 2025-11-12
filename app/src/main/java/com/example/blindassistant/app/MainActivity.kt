@@ -1,10 +1,9 @@
-// app/src/main/java/com/blindassistant/app/MainActivity.kt
+// app/src/main/java/com/example/blindassistant/app/MainActivity.kt
 
 package com.example.blindassistant.app
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -19,10 +18,8 @@ import com.example.blindassistant.app.ml.ModelManager
 import com.example.blindassistant.app.ml.ThreatAnalyzer
 import com.example.blindassistant.app.services.*
 import com.example.blindassistant.app.utils.Constants
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var geminiService: GeminiService
     private lateinit var threatAnalyzer: ThreatAnalyzer
     private lateinit var cameraService: CameraService
+    private lateinit var visionRouter: VisionRouter
 
     companion object {
         private const val TAG = "MainActivity"
@@ -44,6 +42,7 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.BLUETOOTH_ADMIN,
             Manifest.permission.BLUETOOTH_CONNECT,
             Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.ACCESS_FINE_LOCATION
         )
     }
@@ -53,7 +52,6 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Request permissions
         if (allPermissionsGranted()) {
             initializeApp()
         } else {
@@ -62,7 +60,6 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        // Setup screen tap for voice commands
         binding.root.setOnClickListener {
             handleScreenTap()
         }
@@ -86,22 +83,32 @@ class MainActivity : AppCompatActivity() {
 
                 // Initialize models
                 binding.statusText.text = "Loading AI models..."
-                withContext(Dispatchers.IO) {
-                    modelManager.initialize()
-                    // Initialize Gemini
-                    val apiKey = "AIzaSyDgRqWTgrl6kMLHRLA42LKHAnOoYUwROcE"  // Replace with actual key
-                    geminiService.initialize(apiKey)
-                }
+                modelManager.initialize()
+
+                // Initialize Gemini - REPLACE WITH YOUR ACTUAL API KEY
+                val apiKey = "AIzaSyDgRqWTgrl6kMLHRLA42LKHAnOoYUwROcE"  // ← CHANGE THIS
+                geminiService.initialize(apiKey)
 
                 // Initialize threat analyzer
                 threatAnalyzer = ThreatAnalyzer(audioManager, bleManager)
+
+                // Initialize vision router (NEW)
+                visionRouter = VisionRouter(
+                    this@MainActivity,
+                    geminiService,
+                    audioManager
+                )
 
                 // Initialize camera service
                 cameraService = CameraService(
                     this@MainActivity,
                     modelManager,
-                    threatAnalyzer
+                    threatAnalyzer,
+                    audioManager
                 )
+
+                // Connect vision router to camera (NEW)
+                cameraService.setVisionRouter(visionRouter)
 
                 // Start camera
                 binding.statusText.text = "Starting camera..."
@@ -138,7 +145,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun observeState() {
-        // Observe glove connection
         lifecycleScope.launch {
             bleManager.isConnected.collectLatest { connected ->
                 binding.gloveStatus.text = if (connected) {
@@ -149,70 +155,38 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Observe FPS
         lifecycleScope.launch {
             cameraService.fps.collectLatest { fps ->
                 binding.fpsText.text = "FPS: $fps"
             }
         }
 
-        // Observe detections (for visual feedback)
         lifecycleScope.launch {
             cameraService.detections.collectLatest { detections ->
-                // Could draw bounding boxes here for sighted helpers
                 Log.d(TAG, "Detected ${detections.size} objects")
             }
         }
     }
 
     private fun handleScreenTap() {
-        // Toggle voice listening
         binding.voiceIndicator.visibility = View.VISIBLE
         audioManager.speak("Listening for command", Constants.PRIORITY_HIGH)
 
-        // In production, implement speech recognition here
-        // For now, just hide indicator after 3 seconds
         binding.root.postDelayed({
             binding.voiceIndicator.visibility = View.GONE
         }, 3000)
     }
 
     private fun handleGloveButton(buttonId: Byte) {
-        when (buttonId.toInt()) {
-            0x01 -> {
-                // OCR button
-                audioManager.speak("Reading text", Constants.PRIORITY_HIGH)
-                captureAndProcessOCR()
-            }
-            0x02 -> {
-                // Scene describe button
-                audioManager.speak("Analyzing scene", Constants.PRIORITY_HIGH)
-                captureAndDescribeScene()
-            }
-        }
-    }
+        when (buttonId) {
+            Constants.BUTTON_EVENT -> {
+                lifecycleScope.launch {
+                    // Handle QR/OCR mode (NEW FEATURE)
+                    cameraService.handleButtonPress()
 
-    private fun captureAndProcessOCR() {
-        // Capture current frame and process with Gemini
-        lifecycleScope.launch {
-            try {
-                // In production, capture actual frame from camera
-                // For now, this is a placeholder
-                audioManager.speak("OCR feature coming soon", Constants.PRIORITY_MEDIUM)
-            } catch (e: Exception) {
-                Log.e(TAG, "OCR error", e)
-                audioManager.speak("Failed to read text", Constants.PRIORITY_HIGH)
-            }
-        }
-    }
-
-    private fun captureAndDescribeScene() {
-        lifecycleScope.launch {
-            try {
-                audioManager.speak("Scene description coming soon", Constants.PRIORITY_MEDIUM)
-            } catch (e: Exception) {
-                Log.e(TAG, "Scene description error", e)
-                audioManager.speak("Failed to describe scene", Constants.PRIORITY_HIGH)
+                    // Haptic confirmation
+                    bleManager.sendHapticCommand(Constants.HAPTIC_CONFIRM)
+                }
             }
         }
     }
