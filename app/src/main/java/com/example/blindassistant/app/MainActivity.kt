@@ -100,7 +100,7 @@ class MainActivity : AppCompatActivity() {
                 geminiService.initialize(apiKey)
 
                 // Initialize threat analyzer
-                threatAnalyzer = ThreatAnalyzer(audioManager, bleManager)
+                threatAnalyzer = ThreatAnalyzer(audioManager, bleManager, lifecycleScope)
 
                 // Initialize vision router (NEW)
                 visionRouter = VisionRouter(
@@ -114,7 +114,8 @@ class MainActivity : AppCompatActivity() {
                     this@MainActivity,
                     modelManager,
                     threatAnalyzer,
-                    audioManager
+                    audioManager,
+                    lifecycleScope
                 )
 
                 // Connect vision router to camera (NEW)
