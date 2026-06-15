@@ -10,9 +10,11 @@
     <androidx.camera.view.PreviewView
         android:id="@+id/cameraPreview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:contentDescription="Camera preview"
+        android:importantForAccessibility="no" />
 
-    <!-- Status Overlay -->
+    <!-- Status Overlay — visual-only, announced programmatically via TTS -->
     <LinearLayout
         android:id="@+id/statusOverlay"
         android:layout_width="match_parent"
@@ -20,6 +22,7 @@
         android:orientation="vertical"
         android:padding="16dp"
         android:background="#CC000000"
+        android:importantForAccessibility="no"
         app:layout_constraintTop_toTopOf="parent">
 
         <TextView
@@ -29,16 +32,19 @@
             android:text="Initializing..."
             android:textColor="#FFFFFF"
             android:textSize="16sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:importantForAccessibility="no" />
 
         <TextView
             android:id="@+id/gloveStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="🤚 Glove: Disconnected"
+            android:text="Glove: Disconnected"
+            android:contentDescription="Glove disconnected"
             android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:importantForAccessibility="no" />
 
         <TextView
             android:id="@+id/fpsText"
@@ -47,21 +53,25 @@
             android:layout_marginTop="4dp"
             android:text="FPS: 0"
             android:textColor="#00FF00"
-            android:textSize="12sp" />
+            android:textSize="12sp"
+            android:importantForAccessibility="no" />
     </LinearLayout>
 
-    <!-- Voice Indicator -->
+    <!-- Voice Indicator — announced programmatically via announceForAccessibility -->
     <TextView
         android:id="@+id/voiceIndicator"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="🎤 Listening..."
+        android:text="Listening..."
+        android:contentDescription="Listening for voice command"
         android:textColor="#FFFFFF"
         android:textSize="20sp"
         android:textStyle="bold"
         android:background="#CC4CAF50"
         android:padding="16dp"
         android:visibility="gone"
+        android:importantForAccessibility="yes"
+        android:accessibilityLiveRegion="polite"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"

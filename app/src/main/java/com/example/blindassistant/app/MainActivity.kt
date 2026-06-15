@@ -157,11 +157,10 @@ class MainActivity : AppCompatActivity() {
     private fun observeState() {
         lifecycleScope.launch {
             bleManager.isConnected.collectLatest { connected ->
-                binding.gloveStatus.text = if (connected) {
-                    "🤚 Glove: Connected"
-                } else {
-                    "🤚 Glove: Disconnected"
-                }
+                val statusText = if (connected) "Glove: Connected" else "Glove: Disconnected"
+                binding.gloveStatus.text = statusText
+                binding.gloveStatus.contentDescription = statusText
+                binding.root.announceForAccessibility(statusText)
             }
         }
 
