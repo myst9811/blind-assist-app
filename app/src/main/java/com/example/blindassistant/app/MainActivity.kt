@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity() {
                 modelManager.initialize()
 
                 // Initialize Gemini - REPLACE WITH YOUR ACTUAL API KEY
-                val apiKey = "AIzaSyDgRqWTgrl6kMLHRLA42LKHAnOoYUwROcE"  // ← CHANGE THIS
+                val apiKey = BuildConfig.GEMINI_API_KEY
                 geminiService.initialize(apiKey)
 
                 // Initialize threat analyzer

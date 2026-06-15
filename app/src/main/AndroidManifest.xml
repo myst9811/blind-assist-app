@@ -19,7 +19,7 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -37,9 +37,5 @@
             </intent-filter>
         </activity>
 
-        <!-- Metadata for Gemini API -->
-        <meta-data
-            android:name="com.google.ai.generativeai.API_KEY"
-            android:value="AIzaSyDgRqWTgrl6kMLHRLA42LKHAnOoYUwROcE" />
     </application>
 </manifest>
