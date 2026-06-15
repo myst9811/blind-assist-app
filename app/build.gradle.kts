@@ -1,7 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+}
+
+val localProps = Properties()
+val localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+    localPropsFile.inputStream().use { localProps.load(it) }
 }
 
 android {
@@ -16,6 +24,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "GEMINI_API_KEY", "\"${localProps.getProperty("GEMINI_API_KEY", "")}\"")
     }
 
     buildTypes {
@@ -37,7 +46,7 @@ android {
     buildFeatures {
         compose = true
         viewBinding = true
-
+        buildConfig = true
     }
 
     packaging {
@@ -134,6 +143,9 @@ dependencies {
 
     // Gemini AI
     implementation("com.google.ai.client.generativeai:generativeai:0.1.2")
+
+    // ML Kit — on-device text recognition fallback
+    implementation("com.google.mlkit:text-recognition:16.0.0")
 
     // Network
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

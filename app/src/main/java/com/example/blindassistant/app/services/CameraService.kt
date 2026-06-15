@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -26,7 +27,8 @@ class CameraService(
     private val context: Context,
     private val modelManager: ModelManager,
     private val threatAnalyzer: ThreatAnalyzer,
-    private val audioManager: AudioManager
+    private val audioManager: AudioManager,
+    private val scope: CoroutineScope
 ) {
 
     private var imageAnalysis: ImageAnalysis? = null
@@ -124,7 +126,7 @@ class CameraService(
             // FIX: Use local immutable copy to avoid smart cast issues
             val router = visionRouter
             if (frameCount % 10 == 0 && router != null) {
-                CoroutineScope(Dispatchers.IO).launch {
+                scope.launch(Dispatchers.IO) {
                     when (currentMode) {
                         Constants.DetectionMode.NORMAL -> {
                             // Check for QR codes first

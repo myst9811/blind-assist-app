@@ -1,5 +1,3 @@
-// app/src/main/java/com/example/blindassistant/app/ml/ModelManager.kt
-
 package com.example.blindassistant.app.ml
 
 import android.content.Context
@@ -15,6 +13,11 @@ import org.pytorch.torchvision.TensorImageUtils
 import java.io.File
 import java.io.FileOutputStream
 
+sealed class ModelLoadResult {
+    object Success : ModelLoadResult()
+    data class Error(val message: String, val cause: Throwable? = null) : ModelLoadResult()
+}
+
 class ModelManager(private val context: Context) {
 
     private var yoloModel: Module? = null
@@ -27,26 +30,35 @@ class ModelManager(private val context: Context) {
         private const val POTHOLE_MODEL = "models/best.torchscript"
         private const val INPUT_SIZE = 640
         private const val POTHOLE_INPUT_SIZE = 416
+        private const val MAX_DETECTIONS_BEFORE_NMS = 200
     }
 
-    suspend fun initialize() {
-        if (isInitialized) return
+    suspend fun initialize(): ModelLoadResult {
+        if (isInitialized) return ModelLoadResult.Success
 
-        try {
+        return try {
             Log.d(TAG, "Initializing models...")
 
+            if (!assetExists(YOLO_MODEL)) {
+                return ModelLoadResult.Error("YOLO model not found in assets: $YOLO_MODEL")
+            }
+            if (!assetExists(POTHOLE_MODEL)) {
+                return ModelLoadResult.Error("Pothole model not found in assets: $POTHOLE_MODEL")
+            }
+
             yoloModel = Module.load(assetFilePath(YOLO_MODEL))
-            Log.d(TAG, "✅ YOLOv8 loaded")
+            Log.d(TAG, "YOLOv8 loaded")
 
             potholeModel = Module.load(assetFilePath(POTHOLE_MODEL))
-            Log.d(TAG, "✅ Pothole detector loaded")
+            Log.d(TAG, "Pothole detector loaded")
 
             isInitialized = true
-            Log.d(TAG, "🎉 All models initialized")
+            Log.d(TAG, "All models initialized")
+            ModelLoadResult.Success
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Model initialization failed", e)
-            throw e
+            Log.e(TAG, "Model initialization failed", e)
+            ModelLoadResult.Error("Failed to load models: ${e.message}", e)
         }
     }
 
@@ -135,20 +147,19 @@ class ModelManager(private val context: Context) {
             }
         }
 
-        return nonMaxSuppression(detections)
+        return nonMaxSuppression(detections.take(MAX_DETECTIONS_BEFORE_NMS))
     }
 
     private fun nonMaxSuppression(detections: List<Detection>): List<Detection> {
-        val sorted = detections.sortedByDescending { it.confidence }.toMutableList()
+        val sorted = ArrayDeque(detections.sortedByDescending { it.confidence })
         val keep = mutableListOf<Detection>()
 
         while (sorted.isNotEmpty()) {
-            val best = sorted.removeAt(0)
+            val best = sorted.removeFirst()
             keep.add(best)
-
             sorted.removeAll { detection ->
-                val iou = calculateIOU(best.bbox, detection.bbox)
-                iou > Constants.IOU_THRESHOLD && best.classId == detection.classId
+                calculateIOU(best.bbox, detection.bbox) > Constants.IOU_THRESHOLD &&
+                        best.classId == detection.classId
             }
         }
 
@@ -169,10 +180,16 @@ class ModelManager(private val context: Context) {
         return if (union > 0) intersection / union else 0f
     }
 
+    private fun assetExists(assetName: String): Boolean {
+        return try {
+            context.assets.open(assetName).use { true }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private fun assetFilePath(assetName: String): String {
         val outFile = File(context.filesDir, assetName)
-
-        // Create parent directories if needed
         outFile.parentFile?.mkdirs()
 
         if (!outFile.exists()) {
@@ -185,7 +202,6 @@ class ModelManager(private val context: Context) {
 
         return outFile.absolutePath
     }
-
 
     fun cleanup() {
         yoloModel = null

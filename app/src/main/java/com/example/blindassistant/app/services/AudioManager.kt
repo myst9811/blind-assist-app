@@ -1,5 +1,3 @@
-// app/src/main/java/com/example/blindassistant/app/services/AudioManager.kt
-
 package com.example.blindassistant.app.services
 
 import android.content.Context
@@ -12,7 +10,8 @@ import com.example.blindassistant.app.utils.Constants
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.*
-import java.util.PriorityQueue
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.PriorityBlockingQueue
 
 class AudioManager(private val context: Context) {
 
@@ -34,8 +33,8 @@ class AudioManager(private val context: Context) {
         }
     }
 
-    private val queue = PriorityQueue<AudioQueueItem>()
-    private val lastSpoken = mutableMapOf<String, Long>()
+    private val queue = PriorityBlockingQueue<AudioQueueItem>()
+    private val lastSpoken = ConcurrentHashMap<String, Long>()
     private val deduplicationWindow = 3000L
 
     companion object {
@@ -46,10 +45,8 @@ class AudioManager(private val context: Context) {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.let { textToSpeech ->
-                    // Set language
                     textToSpeech.language = Locale.US
 
-                    // Try to find the best voice
                     val availableVoices = textToSpeech.voices
                     val preferredVoice = availableVoices?.firstOrNull { voice ->
                         (voice.name.contains("female", ignoreCase = true) ||
@@ -62,16 +59,12 @@ class AudioManager(private val context: Context) {
 
                     if (preferredVoice != null) {
                         textToSpeech.voice = preferredVoice
-                        Log.d(TAG, "✅ Using voice: ${preferredVoice.name}")
-                    } else {
-                        Log.d(TAG, "Using default voice")
+                        Log.d(TAG, "Using voice: ${preferredVoice.name}")
                     }
 
-                    // Set speech parameters
                     textToSpeech.setSpeechRate(0.85f)
                     textToSpeech.setPitch(1.0f)
 
-                    // Set utterance listener
                     textToSpeech.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {
                             _isSpeaking.value = true
@@ -90,20 +83,21 @@ class AudioManager(private val context: Context) {
                 }
 
                 isInitialized = true
-                Log.d(TAG, "✅ TextToSpeech initialized")
+                Log.d(TAG, "TextToSpeech initialized")
                 onReady()
             } else {
-                Log.e(TAG, "❌ TextToSpeech initialization failed")
+                Log.e(TAG, "TextToSpeech initialization failed")
             }
         }
     }
 
+    @Synchronized
     fun speak(text: String, priority: Int = Constants.PRIORITY_MEDIUM) {
         if (!isInitialized || text.isBlank()) return
 
         val key = text.take(50)
-        val lastTime = lastSpoken[key] ?: 0L
         val now = System.currentTimeMillis()
+        val lastTime = lastSpoken[key] ?: 0L
 
         if (now - lastTime < deduplicationWindow) {
             Log.d(TAG, "Skipping duplicate: $text")
@@ -128,6 +122,7 @@ class AudioManager(private val context: Context) {
         speak(text, Constants.PRIORITY_CRITICAL)
     }
 
+    @Synchronized
     private fun processQueue() {
         if (_isSpeaking.value || queue.isEmpty()) return
 

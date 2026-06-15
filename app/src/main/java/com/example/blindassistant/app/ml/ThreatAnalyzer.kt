@@ -1,5 +1,3 @@
-// app/src/main/java/com/example/blindassistant/app/ml/ThreatAnalyzer.kt
-
 package com.example.blindassistant.app.ml
 
 import android.util.Log
@@ -15,13 +13,17 @@ import kotlin.math.abs
 
 class ThreatAnalyzer(
     private val audioManager: AudioManager,
-    private val bleManager: BLEManager
+    private val bleManager: BLEManager,
+    private val scope: CoroutineScope
 ) {
 
-    private val lastAlertTime = mutableMapOf<String, Long>()
+    private val lastAlertTime = object : LinkedHashMap<String, Long>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: Map.Entry<String, Long>) = size > 50
+    }
+
     private val alertCooldown = 4000L
     private val criticalCooldown = 2000L
-    private val collisionCooldown = 1000L  // Very short for collisions
+    private val collisionCooldown = 1000L
 
     private var lastAudioTime = 0L
     private val audioMinInterval = 2500L
@@ -37,7 +39,6 @@ class ThreatAnalyzer(
         private const val CRITICAL_DISTANCE = 2.0f
         private const val HIGH_DISTANCE = 3.5f
         private const val MEDIUM_DISTANCE = 5.0f
-
         private const val MIN_AREA_THRESHOLD = 0.03f
     }
 
@@ -45,13 +46,11 @@ class ThreatAnalyzer(
         val area = detection.bbox.width * detection.bbox.height
         if (area < MIN_AREA_THRESHOLD) return
 
-        // PRIORITY 1: Check for imminent collision
         if (isImminentCollision(detection)) {
             handleCollision(detection)
-            return  // Handle collision immediately
+            return
         }
 
-        // PRIORITY 2: Regular threat analysis
         val threatLevel = classifyThreat(detection)
         if (threatLevel == ThreatLevel.NONE) return
 
@@ -84,33 +83,27 @@ class ThreatAnalyzer(
 
         if (now - lastHapticTime > hapticMinInterval) {
             lastHapticTime = now
-            CoroutineScope(Dispatchers.Main).launch {
+            scope.launch(Dispatchers.Main) {
                 triggerHapticFeedback(threatLevel, direction)
             }
         }
 
         if (now - lastAudioTime > audioMinInterval) {
             lastAudioTime = now
-            CoroutineScope(Dispatchers.Main).launch {
+            scope.launch(Dispatchers.Main) {
                 triggerAudioFeedback(detection, threatLevel, distance, direction)
             }
         }
     }
 
-    // NEW: Detect if user is walking straight into something
     private fun isImminentCollision(detection: Detection): Boolean {
         val area = detection.bbox.width * detection.bbox.height
         val centerX = detection.bbox.x + detection.bbox.width / 2
         val centerY = detection.bbox.y + detection.bbox.height / 2
 
-        // Check if object is:
-        // 1. Large (taking up significant screen space)
-        // 2. In CENTER of frame (walking straight at it)
-        // 3. In the right class (solid objects)
-
         val isLarge = area > Constants.COLLISION_AREA_THRESHOLD
         val isCentered = abs(centerX - 0.5f) < Constants.COLLISION_CENTER_THRESHOLD
-        val isInUpperHalf = centerY < 0.6f  // Not looking down at floor
+        val isInUpperHalf = centerY < 0.6f
         val isCollisionObject = detection.className in Constants.COLLISION_THREATS
 
         return isLarge && isCentered && isInUpperHalf && isCollisionObject
@@ -118,20 +111,15 @@ class ThreatAnalyzer(
 
     private fun handleCollision(detection: Detection) {
         val now = System.currentTimeMillis()
-
-        // Rate limit collision alerts (but very short cooldown)
         if (now - lastCollisionTime < collisionCooldown) return
         lastCollisionTime = now
 
-        Log.w(TAG, "⚠️ COLLISION DETECTED: ${detection.className}")
+        Log.w(TAG, "COLLISION DETECTED: ${detection.className}")
 
-        // EMERGENCY HAPTIC - strongest pattern
-        CoroutineScope(Dispatchers.Main).launch {
-            bleManager.sendHapticCommand(0x99.toByte(), Constants.DIRECTION_FRONT)  // Emergency code
+        scope.launch(Dispatchers.Main) {
+            bleManager.sendHapticCommand(0x99.toByte(), Constants.DIRECTION_FRONT)
         }
-
-        // URGENT AUDIO
-        CoroutineScope(Dispatchers.Main).launch {
+        scope.launch(Dispatchers.Main) {
             audioManager.speakImmediate("Stop! ${detection.className} ahead!")
         }
     }
@@ -148,7 +136,6 @@ class ThreatAnalyzer(
                     else -> ThreatLevel.NONE
                 }
             }
-
             detection.className in Constants.HIGH_THREATS -> {
                 when {
                     distance < 2.0f -> ThreatLevel.HIGH
@@ -157,7 +144,6 @@ class ThreatAnalyzer(
                     else -> ThreatLevel.NONE
                 }
             }
-
             detection.className in Constants.MEDIUM_THREATS -> {
                 when {
                     distance < 1.5f -> ThreatLevel.MEDIUM
@@ -165,7 +151,6 @@ class ThreatAnalyzer(
                     else -> ThreatLevel.NONE
                 }
             }
-
             detection.className in Constants.POTHOLE_CLASSES -> {
                 when {
                     distance < 3.0f -> ThreatLevel.HIGH
@@ -173,14 +158,12 @@ class ThreatAnalyzer(
                     else -> ThreatLevel.NONE
                 }
             }
-
             else -> ThreatLevel.NONE
         }
     }
 
     private fun estimateDistance(detection: Detection): Float {
         val area = detection.bbox.width * detection.bbox.height
-
         return when {
             area > 0.35f -> 0.5f
             area > 0.20f -> 1.5f
@@ -192,7 +175,6 @@ class ThreatAnalyzer(
 
     private fun calculateDirection(detection: Detection): Byte {
         val centerX = detection.bbox.x + detection.bbox.width / 2
-
         return when {
             centerX < 0.4f -> Constants.DIRECTION_LEFT
             centerX > 0.6f -> Constants.DIRECTION_RIGHT
@@ -208,7 +190,6 @@ class ThreatAnalyzer(
             ThreatLevel.LOW -> Constants.HAPTIC_LOW
             else -> return
         }
-
         bleManager.sendHapticCommand(command, direction)
     }
 
@@ -232,18 +213,10 @@ class ThreatAnalyzer(
         }
 
         val message = when (level) {
-            ThreatLevel.CRITICAL -> {
-                "Warning! ${detection.className} $directionText, $distanceText"
-            }
-            ThreatLevel.HIGH -> {
-                "${detection.className} $directionText, $distanceText"
-            }
-            ThreatLevel.MEDIUM -> {
-                "${detection.className} $directionText"
-            }
-            ThreatLevel.LOW -> {
-                "Obstacle $directionText"
-            }
+            ThreatLevel.CRITICAL -> "Warning! ${detection.className} $directionText, $distanceText"
+            ThreatLevel.HIGH -> "${detection.className} $directionText, $distanceText"
+            ThreatLevel.MEDIUM -> "${detection.className} $directionText"
+            ThreatLevel.LOW -> "Obstacle $directionText"
             else -> return
         }
 

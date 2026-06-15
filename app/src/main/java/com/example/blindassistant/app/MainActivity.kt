@@ -14,6 +14,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.blindassistant.app.databinding.ActivityMainBinding
+import com.example.blindassistant.app.ml.ModelLoadResult
 import com.example.blindassistant.app.ml.ModelManager
 import com.example.blindassistant.app.ml.ThreatAnalyzer
 import com.example.blindassistant.app.services.*
@@ -83,14 +84,23 @@ class MainActivity : AppCompatActivity() {
 
                 // Initialize models
                 binding.statusText.text = "Loading AI models..."
-                modelManager.initialize()
+                when (val result = modelManager.initialize()) {
+                    is ModelLoadResult.Success -> Log.d(TAG, "Models loaded")
+                    is ModelLoadResult.Error -> {
+                        binding.statusText.text = "Model error: ${result.message}"
+                        audioManager.speak(
+                            "Warning: object detection unavailable. ${result.message}",
+                            Constants.PRIORITY_CRITICAL
+                        )
+                    }
+                }
 
                 // Initialize Gemini - REPLACE WITH YOUR ACTUAL API KEY
-                val apiKey = "AIzaSyDgRqWTgrl6kMLHRLA42LKHAnOoYUwROcE"  // ← CHANGE THIS
+                val apiKey = BuildConfig.GEMINI_API_KEY
                 geminiService.initialize(apiKey)
 
                 // Initialize threat analyzer
-                threatAnalyzer = ThreatAnalyzer(audioManager, bleManager)
+                threatAnalyzer = ThreatAnalyzer(audioManager, bleManager, lifecycleScope)
 
                 // Initialize vision router (NEW)
                 visionRouter = VisionRouter(
@@ -104,7 +114,8 @@ class MainActivity : AppCompatActivity() {
                     this@MainActivity,
                     modelManager,
                     threatAnalyzer,
-                    audioManager
+                    audioManager,
+                    lifecycleScope
                 )
 
                 // Connect vision router to camera (NEW)
@@ -147,11 +158,10 @@ class MainActivity : AppCompatActivity() {
     private fun observeState() {
         lifecycleScope.launch {
             bleManager.isConnected.collectLatest { connected ->
-                binding.gloveStatus.text = if (connected) {
-                    "🤚 Glove: Connected"
-                } else {
-                    "🤚 Glove: Disconnected"
-                }
+                val statusText = if (connected) "Glove: Connected" else "Glove: Disconnected"
+                binding.gloveStatus.text = statusText
+                binding.gloveStatus.contentDescription = statusText
+                binding.root.announceForAccessibility(statusText)
             }
         }
 
