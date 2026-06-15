@@ -14,6 +14,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.blindassistant.app.databinding.ActivityMainBinding
+import com.example.blindassistant.app.ml.ModelLoadResult
 import com.example.blindassistant.app.ml.ModelManager
 import com.example.blindassistant.app.ml.ThreatAnalyzer
 import com.example.blindassistant.app.services.*
@@ -83,7 +84,16 @@ class MainActivity : AppCompatActivity() {
 
                 // Initialize models
                 binding.statusText.text = "Loading AI models..."
-                modelManager.initialize()
+                when (val result = modelManager.initialize()) {
+                    is ModelLoadResult.Success -> Log.d(TAG, "Models loaded")
+                    is ModelLoadResult.Error -> {
+                        binding.statusText.text = "Model error: ${result.message}"
+                        audioManager.speak(
+                            "Warning: object detection unavailable. ${result.message}",
+                            Constants.PRIORITY_CRITICAL
+                        )
+                    }
+                }
 
                 // Initialize Gemini - REPLACE WITH YOUR ACTUAL API KEY
                 val apiKey = BuildConfig.GEMINI_API_KEY
