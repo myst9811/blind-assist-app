@@ -144,6 +144,9 @@ dependencies {
     // Gemini AI
     implementation("com.google.ai.client.generativeai:generativeai:0.1.2")
 
+    // ML Kit — on-device text recognition fallback
+    implementation("com.google.mlkit:text-recognition:16.0.0")
+
     // Network
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
